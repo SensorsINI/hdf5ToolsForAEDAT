@@ -13,8 +13,8 @@
 #include "hdf5.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-#define FILE            "rec1498945830.hdf5"
 #define OUTFILE       "convert_result.hdf5"
 #define DATASET         "/dvs/data"
 #define POLNUM         200
@@ -24,13 +24,11 @@
 #define EVENTSIZE            4
 #define EVENTNUM1            10
 #define EVENTNUM2            15
-#define CHUNK0          128
+#define CHUNK0          4096
 #define CHUNK1          POLSIZE
-#define EDIM0           6
-#define EDIM1           POLSIZE
 
 int
-main (void)
+main (int argc, char **argv)
 {
     hid_t       file, filetype, memtype, space, dset;
                                     /* Handles */
@@ -44,7 +42,7 @@ main (void)
                 dims[2] = {50, 2};
     hsize_t     maxdims[2] = {0, 0},
                 chunk[2] = {CHUNK0, CHUNK1},
-                extdims[2] = {EDIM0, EDIM1};
+                extdims[2] = {0, POLSIZE};
     char         *ptr,
                 ndims;
     hsize_t     i, j, k;
@@ -62,7 +60,9 @@ main (void)
     /*
      * Open file and dataset.
      */
-    file = H5Fopen (FILE, H5F_ACC_RDONLY, H5P_DEFAULT);
+    char * srcFilename = (argc < 2) ? "rec1498945830.hdf5" : argv[1];
+    printf ("Input file name is %s.\n", srcFilename);
+    file = H5Fopen (srcFilename, H5F_ACC_RDONLY, H5P_DEFAULT);
     dset = H5Dopen (file, DATASET, H5P_DEFAULT);
 
     /*
@@ -116,7 +116,9 @@ main (void)
     /*
      * Create a new file using the default properties.
      */
-    file = H5Fcreate (OUTFILE, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+    char * dstFilename = (argc < 3) ? "convert_result.hdf5" : argv[2];
+    printf ("Output file name is %s.\n", dstFilename);
+    file = H5Fcreate (dstFilename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
     /*
      * Create group creation property list and enable link creation
@@ -155,6 +157,7 @@ main (void)
     maxdims[0] = H5S_UNLIMITED;
     maxdims[1] = H5S_UNLIMITED;
     space = H5Screate_simple (2, dims, maxdims);
+
     /*
      * Create the dataset creation property list, and set the chunk
      * size.
@@ -162,26 +165,78 @@ main (void)
     dcpl = H5Pcreate (H5P_DATASET_CREATE);
     status = H5Pset_chunk (dcpl, 2, chunk);
 
-    dset = H5Dcreate (file, "/dvs/special/data", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
+    hid_t dset_spe_data = H5Dcreate (file, "/dvs/special/data", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
                 H5P_DEFAULT);
 
-    dset = H5Dcreate (file, "/dvs/polarity/data", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
+    hid_t dset_spe_systs = H5Dcreate (file, "/dvs/special/system_ts", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
                 H5P_DEFAULT);
 
+    hid_t dset_pol_data = H5Dcreate (file, "/dvs/polarity/data", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
+                H5P_DEFAULT);
+
+    hid_t dset_pol_systs = H5Dcreate (file, "/dvs/polarity/system_ts", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
+                H5P_DEFAULT);
+
+    hid_t dset_frame_data = H5Dcreate (file, "/dvs/frame/data", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
+                H5P_DEFAULT);
+
+    hid_t dset_frame_systs = H5Dcreate (file, "/dvs/frame/system_ts", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
+                H5P_DEFAULT);
+
+    hid_t dset_IMU6_data = H5Dcreate (file, "/dvs/IMU6/data", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
+                H5P_DEFAULT);
+
+    hid_t dset_IMU6_systs = H5Dcreate (file, "/dvs/IMU6/system_ts", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
+                H5P_DEFAULT);
     /* 
      * Iteratelly read the rows in the origin file.
      */
-    int polPktNum = 0;
+    int polPktNum = 0, spePktNum = 0, framePktNum = 0, IMU6PktNum = 0, nullPktNum = 0;
+    int rowSize = 0;
     for (i=0; i<oriDims[0]; i++) {
         
         ptr = rdata[3*i + 1].p;
         if (ptr != NULL) {
+            rowSize = ptr[4] + (ptr[5] << 8) + (ptr[6] << 16) + (ptr[7] << 24);
             if (ptr[0] == 1) {
                 polPktNum += 1;
-            } else {
+                dset = dset_pol_data;
+                if (rowSize != 8) {
+                    printf ("Something is wrong here, polarity events!\n");
+                }
+            }
+
+            if (ptr[0] == 0) {
+                spePktNum += 1;
+                dset = dset_spe_data;
+                if (rowSize != 8) {
+                    printf ("Something is wrong here, special events!\n");
+                }
+            }
+
+            if (ptr[0] == 2) {
+                framePktNum += 1;
+                dset = dset_frame_data;
+                if (rowSize % 128 == 0) {
+                    rowSize = 128;
+                }
+
+                if (rowSize % 240 == 0) {
+                    rowSize = 240;
+                }
+
+                if (rowSize % 346 == 0) {
+                    rowSize = 346;
+                }
                 continue;
             }
+
+            if (ptr[0]  == 3) {
+                IMU6PktNum += 1;
+                dset = dset_IMU6_data;
+            }
         } else {
+            nullPktNum += 1;
             continue;
         }
         space = H5Dget_space (dset);    /* The output file dataspace handle */
@@ -189,7 +244,8 @@ main (void)
         ndims = H5Sget_simple_extent_dims (space, dims, NULL);
 
 
-        extdims[0] = (rdata[3*i + 2].len)/POLSIZE;
+        extdims[0] = (rdata[3*i + 2].len)/rowSize;
+        extdims[1] = rowSize;
         ptr = rdata[3*i + 2].p;
         char wdata2[extdims[0]][extdims[1]];
         /*
@@ -197,8 +253,8 @@ main (void)
          */
         for (j=0; j<extdims[0]; j++) {        
             for (k=0; k<extdims[1]; k++) {
-                wdata2[j][k] = ptr[j * POLSIZE + k];
-                // wdata2[j][k] = j * POLSIZE + k;
+                wdata2[j][k] = ptr[j * rowSize + k];
+                // wdata2[j][k] = j * rowSize + k;
             }
         }
 
@@ -225,7 +281,7 @@ main (void)
         offset[0] = dims[0];
         offset[1] = 0;
         count[0]  = extdims[0] - dims[0];
-        count[1]  = POLSIZE;
+        count[1]  = rowSize;
         status = H5Sselect_hyperslab (space, H5S_SELECT_SET, offset, NULL, 
                 count, NULL);
 
@@ -233,6 +289,10 @@ main (void)
     }
 
     printf ("The total number of the polarity event packets is: %d.\n", polPktNum);
+    printf ("The total number of the special event packets is: %d.\n", spePktNum);
+    printf ("The total number of the frame event packets is: %d.\n", framePktNum);
+    printf ("The total number of the IMU6 event packets is: %d.\n", IMU6PktNum);
+    printf ("The total number of the null event packets is: %d.\n", nullPktNum);
 
     /*
      * Get group info.
@@ -292,7 +352,6 @@ main (void)
         size = H5Lget_name_by_idx (group, ".", H5_INDEX_CRT_ORDER, H5_ITER_INC, i,
                     name, (size_t) size, H5P_DEFAULT);
         printf ("Index %d: %s\n", (int) i, name);
-        free (name);
     }
 
     /*
