@@ -17,15 +17,8 @@
 
 #define OUTFILE       "convert_result.hdf5"
 #define DATASET         "/dvs/data"
-#define POLNUM         200
-#define POLSIZE         8
-#define TSLEN            16
-#define HEADERLEN            28
-#define EVENTSIZE            4
-#define EVENTNUM1            10
-#define EVENTNUM2            15
 #define CHUNK0          4096
-#define CHUNK1          POLSIZE
+#define CHUNK1          8
 
 int
 main (int argc, char **argv)
@@ -42,7 +35,7 @@ main (int argc, char **argv)
                 dims[2] = {50, 2};
     hsize_t     maxdims[2] = {0, 0},
                 chunk[2] = {CHUNK0, CHUNK1},
-                extdims[2] = {0, POLSIZE};
+                extdims[2] = {0, 0};
     unsigned char         *ptr,
                 ndims;
     hsize_t     i, j, k;
@@ -153,7 +146,7 @@ main (int argc, char **argv)
      * Create dataspace with unlimited dimensions.
      */
     dims[0] = 0;
-    dims[1] = POLSIZE;
+    dims[1] = 0;
     maxdims[0] = H5S_UNLIMITED;
     maxdims[1] = H5S_UNLIMITED;
     space = H5Screate_simple (2, dims, maxdims);
