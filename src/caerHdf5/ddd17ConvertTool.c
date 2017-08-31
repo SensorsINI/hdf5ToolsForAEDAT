@@ -43,7 +43,7 @@ main (int argc, char **argv)
     hsize_t     maxdims[2] = {0, 0},
                 chunk[2] = {CHUNK0, CHUNK1},
                 extdims[2] = {0, POLSIZE};
-    char         *ptr,
+    unsigned char         *ptr,
                 ndims;
     hsize_t     i, j, k;
     char        *name;                              /* Output buffer */
@@ -191,10 +191,11 @@ main (int argc, char **argv)
     /* 
      * Iteratelly read the rows in the origin file.
      */
-    int polPktNum = 0, spePktNum = 0, framePktNum = 0, IMU6PktNum = 0, nullPktNum = 0;
+    int totalPktNum = 0, polPktNum = 0, spePktNum = 0, framePktNum = 0, IMU6PktNum = 0, nullPktNum = 0;
     int rowSize = 0;
     for (i=0; i<oriDims[0]; i++) {
         
+        totalPktNum += 1;
         ptr = rdata[3*i + 1].p;
         if (ptr != NULL) {
             rowSize = ptr[4] + (ptr[5] << 8) + (ptr[6] << 16) + (ptr[7] << 24);
@@ -217,18 +218,18 @@ main (int argc, char **argv)
             if (ptr[0] == 2) {
                 framePktNum += 1;
                 dset = dset_frame_data;
+                rowSize -= 36;
                 if (rowSize % 128 == 0) {
-                    rowSize = 128;
+                    rowSize = 128 * 2;
                 }
 
                 if (rowSize % 240 == 0) {
-                    rowSize = 240;
+                    rowSize = 240 * 2;
                 }
 
                 if (rowSize % 346 == 0) {
-                    rowSize = 346;
+                    rowSize = 346 * 2;
                 }
-                continue;
             }
 
             if (ptr[0]  == 3) {
@@ -288,71 +289,14 @@ main (int argc, char **argv)
         status = H5Dwrite (dset, H5T_NATIVE_UINT8, mspace, space, H5P_DEFAULT, wdata2);
     }
 
+
+    printf ("The total number of the total event packets is: %d.\n", totalPktNum);
     printf ("The total number of the polarity event packets is: %d.\n", polPktNum);
     printf ("The total number of the special event packets is: %d.\n", spePktNum);
     printf ("The total number of the frame event packets is: %d.\n", framePktNum);
     printf ("The total number of the IMU6 event packets is: %d.\n", IMU6PktNum);
     printf ("The total number of the null event packets is: %d.\n", nullPktNum);
 
-    /*
-     * Get group info.
-     */
-    status = H5Gget_info (group, &ginfo);
-
-    /*
-     * Traverse links in the primary group using alphabetical indices
-     * (H5_INDEX_NAME).
-     */
-    printf("Traversing group using alphabetical indices:\n\n");
-    for (i=0; i<ginfo.nlinks; i++) {
-
-        /*
-         * Get size of name, add 1 for null terminator.
-         */
-        size = 1 + H5Lget_name_by_idx (group, ".", H5_INDEX_NAME, H5_ITER_INC,
-                    i, NULL, 0, H5P_DEFAULT);
-
-        /*
-         * Allocate storage for name.
-         */
-        name = (char *) malloc (size);
-
-        /*
-         * Retrieve name, print it, and free the previously allocated
-         * space.
-         */
-        size = H5Lget_name_by_idx (group, ".", H5_INDEX_NAME, H5_ITER_INC, i, name,
-                    (size_t) size, H5P_DEFAULT);
-        printf ("Index %d: %s\n", (int) i, name);
-        free (name);
-    }
-
-    /*
-     * Traverse links in the primary group by creation order
-     * (H5_INDEX_CRT_ORDER).
-     */
-    printf("\nTraversing group using creation order indices:\n\n");
-    for (i=0; i<ginfo.nlinks; i++) {
-
-        /*
-         * Get size of name, add 1 for null terminator.
-         */
-        size = 1 + H5Lget_name_by_idx (group, ".", H5_INDEX_CRT_ORDER,
-                    H5_ITER_INC, i, NULL, 0, H5P_DEFAULT);
-
-        /*
-         * Allocate storage for name.
-         */
-        name = (char *) malloc (size);
-
-        /*
-         * Retrieve name, print it, and free the previously allocated
-         * space.
-         */
-        size = H5Lget_name_by_idx (group, ".", H5_INDEX_CRT_ORDER, H5_ITER_INC, i,
-                    name, (size_t) size, H5P_DEFAULT);
-        printf ("Index %d: %s\n", (int) i, name);
-    }
 
     /*
      * Close and release resources.
