@@ -241,7 +241,11 @@ main (int argc, char **argv)
         extdims[0] = (rdata[3*i + 2].len)/rowSize;
         extdims[1] = rowSize;
         ptr = rdata[3*i + 2].p;
-        char wdata2[extdims[0]][extdims[1]];
+        char **wdata2 = (char **) malloc(extdims[0] * extdims[1]);
+		for (int i = 0; i < extdims[0]; i++) {
+			wdata2[i] = (char *)malloc(extdims[1]);
+		}
+
         /*
          * Copy packet data to the buffer for writing to the extended dataset.
          */
