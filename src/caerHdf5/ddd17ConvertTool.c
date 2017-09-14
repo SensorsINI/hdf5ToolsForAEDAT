@@ -179,7 +179,7 @@ main (int argc, char **argv)
     hid_t dset_pol_systs = H5Dcreate (file, "/dvs/polarity/system_ts", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
                 H5P_DEFAULT);
 
-    hid_t dset_frame_data = H5Dcreate (file, "/dvs/frame/data", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
+    hid_t dset_frame_data = H5Dcreate (file, "/dvs/frame/data", H5T_NATIVE_UINT16, space, H5P_DEFAULT, dcpl,
                 H5P_DEFAULT);
 
     hid_t dset_frame_systs = H5Dcreate (file, "/dvs/frame/system_ts", H5T_NATIVE_UINT8, space, H5P_DEFAULT, dcpl,
@@ -195,6 +195,7 @@ main (int argc, char **argv)
      */
     int totalPktNum = 0, polPktNum = 0, spePktNum = 0, framePktNum = 0, IMU6PktNum = 0, nullPktNum = 0;
     int rowSize = 0;
+    int elemByteNum = 1;   // Byte numbers per element. All of them should be 1, except frame data.
     for (i=0; i<oriDims[0]; i++) {
         
         totalPktNum += 1;
@@ -221,16 +222,17 @@ main (int argc, char **argv)
                 framePktNum += 1;
                 dset = dset_frame_data;
                 rowSize -= 36;
+                elemByteNum = 2;
                 if (rowSize % 128 == 0) {
-                    rowSize = 128 * 2;
+                    rowSize = 128;
                 }
 
                 if (rowSize % 240 == 0) {
-                    rowSize = 240 * 2;
+                    rowSize = 240;
                 }
 
                 if (rowSize % 346 == 0) {
-                    rowSize = 346 * 2;
+                    rowSize = 346;
                 }
             }
 
@@ -247,18 +249,19 @@ main (int argc, char **argv)
         ndims = H5Sget_simple_extent_dims (space, dims, NULL);
 
 
-        extdims[0] = (rdata[3*i + 2].len)/rowSize;
+        extdims[0] = (rdata[3*i + 2].len)/rowSize/elemByteNum;
         extdims[1] = rowSize;
         ptr = rdata[3*i + 2].p;
-        char *wdata2 = (char *) malloc(extdims[0] * extdims[1]);
+        unsigned char *wdata2 = (unsigned char *) malloc(extdims[0] * extdims[1] * elemByteNum);
 
         /*
          * Copy packet data to the buffer for writing to the extended dataset.
          */
-        for (j=0; j<extdims[0]; j++) {        
-            for (k=0; k<extdims[1]; k++) {
-                wdata2[j * rowSize + k] = ptr[j * rowSize + k];
-                // wdata2[j][k] = j * rowSize + k;
+        for (int j=0; j<extdims[0]; j++) {   // rowIndex 
+            for (int k=0; k<extdims[1]; k++) {  // colIndex
+                for (int m=0; m<elemByteNum; m++) { // elemByteIndex
+                    wdata2[(j * extdims[1] + k) * elemByteNum + m] = ptr[(j * extdims[1] + k) * elemByteNum + m + 36];
+                }
             }
         }
 
@@ -289,7 +292,8 @@ main (int argc, char **argv)
         status = H5Sselect_hyperslab (space, H5S_SELECT_SET, offset, NULL, 
                 count, NULL);
 
-        status = H5Dwrite (dset, H5T_NATIVE_UINT8, mspace, space, H5P_DEFAULT, wdata2);
+        memtype = H5Dget_type(dset);
+        status = H5Dwrite (dset, memtype, mspace, space, H5P_DEFAULT, wdata2);
 		free(wdata2);
     }
 
