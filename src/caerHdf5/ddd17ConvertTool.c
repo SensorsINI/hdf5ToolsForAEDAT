@@ -8,7 +8,7 @@
 
   Author: Min Liu <minliu@ini.uzh.ch>
 
- ***e********************************************************/
+ ***********************************************************/
 
 #include "hdf5.h"
 #include <stdio.h>
@@ -107,9 +107,18 @@ main (int argc, char **argv)
 
 
     /*
+     * Append _result to the source file name and set it as the dst file name.
      * Create a new file using the default properties.
      */
-    char * dstFilename = (argc < 3) ? "convert_result.hdf5" : argv[2];
+    char * extName = strchr (srcFilename, '.');
+    int strFnLen = strlen(srcFilename);
+    int strExtLen = strlen(extName);
+    char * tmpName = (char *)malloc(strFnLen * sizeof(char) + sizeof("_convert"));
+    strncpy (tmpName, srcFilename, strFnLen - strExtLen);
+    tmpName[strFnLen - strExtLen] = '\0';
+    strcat (tmpName, "_convert");
+    strcat (tmpName, extName);
+    char * dstFilename = (argc < 3) ? tmpName : argv[2];
     printf ("Output file name is %s.\n", dstFilename);
     file = H5Fcreate (dstFilename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 
